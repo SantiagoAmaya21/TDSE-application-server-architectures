@@ -2,6 +2,8 @@
 
 **Course:** TDSE — Transformación Digital y Soluciones Empresariales (Digital Transformation and Business Solutions)
 
+**Student Name:** Santiago Amaya Zapata
+
 **Goal:** Minimal prototype demonstrating Java reflection, POJO bean loading, and deriving a web application from them (IoC, reflection).
 
 ---
@@ -120,7 +122,7 @@ sequenceDiagram
 ### Clone and build
 
 ```bash
-git clone <repository-url>
+git clone <https://github.com/SantiagoAmaya21/TDSE-application-server-architectures>
 cd TDSE-application-server-architectures
 mvn clean compile
 ```
@@ -201,26 +203,31 @@ pom.xml
 ### Steps
 
 1. Build: `mvn package`.
-2. Upload the JAR to an EC2 instance (or clone the repo and run `mvn package` there). Ensure Java 11+ is installed.
-3. Run the server (e.g. `java -jar target/reflexionlab-1.0-SNAPSHOT.jar` or with `-cp target/classes ... MicroSpringBoot`).
-4. Open port **35000** in the instance security group.
+2. Move the jar to a folder called dist.
+3. Transfer the .jar file to the EC2 instance using the following command:
+```bash
+scp -i "<KEY_PAIR>" dist/reflexionlab-1.0-SNAPSHOT.jar ec2-user@<EC2_PUBLIC_IP>.compute-1.amazonaws.com:/home/ec2-user/
+```
+4. After verifying that the .jar file is in the instance, we access to the EC2 instance usign SSH, then we run the application using:
+```bash
+ java -jar reflexionlab-1.0-SNAPSHOT.jar
+```
 5. Access `http://<public-IP>:35000`.
 
 ### AWS deployment evidence
 
-*Add your screenshots below. Place image files in the `docs/aws/` folder and reference them here.*
-
 **1. EC2 instance / server running**
 
-<!-- Add your screenshot: e.g. ![Server running on EC2](docs/aws/01-server-running.png) -->
+![Imagen1](img/Imagen1.png)
 
 **2. Application responding in the browser**
 
-<!-- Add your screenshot: e.g. ![Browser - root](docs/aws/02-browser-root.png) -->
+![Imagen2](img/Imagen2.png)
+![Imagen3](img/Imagen3.png)
+![Imagen4](img/Imagen4.png)
+**3. EC2 Instance**
 
-**3. (Optional) Additional evidence (e.g. Security Group, terminal)**
-
-<!-- Add your screenshot: e.g. ![Security group or terminal](docs/aws/03-optional.png) -->
+![Imagen5](img/Imagen5.png)
 
 ---
 
