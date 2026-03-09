@@ -1,125 +1,191 @@
-# Taller de Arquitecturas de Servidores de Aplicaciones
+# Application Server Architectures Workshop
 
-**Meta:** Prototipo mínimo que demuestra capacidades reflexivas de Java, carga de beans (POJOs) y derivación de una aplicación web a partir de ellos (IoC, reflexión).
+**Course:** TDSE — Transformación Digital y Soluciones Empresariales (Digital Transformation and Business Solutions)
 
-## Descripción
+**Goal:** Minimal prototype demonstrating Java reflection, POJO bean loading, and deriving a web application from them (IoC, reflection).
 
-Servidor web en Java tipo Apache que:
+---
 
-- Entrega páginas HTML e imágenes PNG (recursos estáticos).
-- Provee un framework IoC para construir aplicaciones web a partir de POJOs.
-- Atiende múltiples solicitudes **no concurrentes** (una por vez).
-- Usa **reflexión** para descubrir componentes anotados (`@RestController`, `@GetMapping`, `@RequestParam`) y publicar servicios REST.
+## Description
 
-## Diseño y arquitectura
+Java web server (Apache-style) that:
 
-### Componentes principales
+- Serves HTML pages and PNG images (static resources).
+- Provides an IoC framework for building web applications from POJOs.
+- Handles multiple **non-concurrent** requests (one at a time).
+- Uses **reflection** to discover annotated components (`@RestController`, `@GetMapping`, `@RequestParam`) and publish REST services.
 
-1. **Anotaciones**  
-   - `@RestController`: marca una clase como componente REST; el framework la instancia y publica sus métodos anotados.  
-   - `@GetMapping("/ruta")`: asocia un método que retorna `String` a una URI GET.  
-   - `@RequestParam(value = "nombre", defaultValue = "valor")`: inyecta parámetros de consulta en el método.
+---
+
+## Design and Architecture
+
+### Architecture diagram
+
+```mermaid
+flowchart TB
+    subgraph Entry["Entry point"]
+        MSB[MicroSpringBoot]
+    end
+
+    subgraph Framework["IoC & discovery"]
+        CPS[ClassPathScanner]
+        RRH[ReflectionRequestHandler]
+    end
+
+    subgraph Controllers["Application controllers"]
+        HC[HelloController]
+        GC[GreetingController]
+        FWS[FirstWebService]
+    end
+
+    subgraph Server["HTTP server"]
+        HS[HttpServer]
+        Static[Static files]
+    end
+
+    MSB --> CPS
+    MSB --> RRH
+    MSB --> HS
+    CPS -->|"discovers @RestController"| HC
+    CPS -->|"discovers @RestController"| GC
+    CPS -->|"discovers @RestController"| FWS
+    RRH -->|"registers & instantiates"| HC
+    RRH -->|"registers & instantiates"| GC
+    RRH -->|"registers & instantiates"| FWS
+    HS -->|"delegates GET"| RRH
+    HS -->|"fallback (no route)"| Static
+```
+
+**Request flow (sequence):**
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant HttpServer
+    participant ReflectionRequestHandler
+    participant Controller
+
+    Client->>HttpServer: GET /greeting?name=World
+    HttpServer->>ReflectionRequestHandler: handle(path, queryParams)
+    ReflectionRequestHandler->>Controller: invoke @GetMapping method (reflection)
+    Controller-->>ReflectionRequestHandler: String
+    ReflectionRequestHandler-->>HttpServer: response body
+    HttpServer-->>Client: 200 OK (text/html)
+```
+
+### Main components
+
+1. **Annotations**  
+   - `@RestController`: marks a class as a REST component; the framework instantiates it and publishes its annotated methods.  
+   - `@GetMapping("/path")`: maps a method that returns `String` to a GET URI.  
+   - `@RequestParam(value = "name", defaultValue = "value")`: injects query parameters into the method.
 
 2. **HttpServer**  
-   Servidor HTTP mínimo (socket en el puerto 35000). Para cada GET:
-   - Consulta primero al `RequestHandler` (rutas REST).
-   - Si no hay ruta, sirve archivos estáticos desde `src/main/resources/static/` (HTML, PNG, etc.).
+   Minimal HTTP server (socket on port 35000). For each GET:
+   - Asks the `RequestHandler` first (REST routes).
+   - If no route matches, serves static files from `src/main/resources/static/` (HTML, PNG, etc.).
 
 3. **ReflectionRequestHandler**  
-   - Mantiene un mapa `ruta → (instancia, método)`.
-   - Al registrar un controlador: instancia la clase por reflexión, recorre métodos con `@GetMapping`, obtiene la URI y guarda la invocación.
-   - En `handle(path, queryParams)`: invoca el método pasando los parámetros según `@RequestParam` (reflexión sobre parámetros).
+   - Keeps a map `path → (instance, method)`.
+   - When registering a controller: instantiates the class via reflection, iterates methods with `@GetMapping`, gets the URI and stores the invocation.
+   - In `handle(path, queryParams)`: invokes the method passing parameters according to `@RequestParam` (reflection on parameters).
 
 4. **ClassPathScanner**  
-   Explora el classpath (directorio y JAR) buscando clases anotadas con `@RestController` en el paquete del framework, para no tener que listarlas en la línea de comandos.
+   Scans the classpath (directory and JAR) for classes annotated with `@RestController` under the framework package, so they do not need to be listed on the command line.
 
 5. **MicroSpringBoot**  
-   Punto de entrada:
-   - **Con argumentos:** carga solo las clases indicadas (ej. `co.edu.escuelaing.reflexionlab.controller.FirstWebService`).
-   - **Sin argumentos:** usa `ClassPathScanner` para cargar todas las clases con `@RestController` bajo el paquete base.
+   Entry point:
+   - **With arguments:** loads only the specified classes (e.g. `co.edu.escuelaing.reflexionlab.controller.FirstWebService`).
+   - **Without arguments:** uses `ClassPathScanner` to load all classes with `@RestController` under the base package.
 
-Así se cumple la sugerencia: primera versión cargando POJOs por línea de comandos y versión final explorando el classpath.
+### GET request flow
 
-### Flujo de una petición GET
+1. `HttpServer` receives the request line and parses path and query.
+2. Calls `RequestHandler.handle(path, queryParams)`.
+3. If it returns a `String`, it is sent as HTML response.
+4. If it returns `null`, a static file (HTML/PNG) is tried.
+5. If no file is found, responds with 404.
 
-1. `HttpServer` recibe la línea de petición y parsea path y query.
-2. Llama a `RequestHandler.handle(path, queryParams)`.
-3. Si devuelve un `String`, se envía como respuesta HTML.
-4. Si devuelve `null`, se intenta servir un archivo estático (HTML/PNG).
-5. Si no hay archivo, se responde 404.
+---
 
-## Requisitos
+## Requirements
 
 - Java 11+
 - Maven 3.6+
 
-## Instalación y uso
+---
 
-### Clonar y compilar
+## Installation and usage
+
+### Clone and build
 
 ```bash
-git clone <url-del-repositorio>
+git clone <repository-url>
 cd TDSE-application-server-architectures
 mvn clean compile
 ```
 
-### Ejecución
+### Run
 
-**Opción 1 – Carga por línea de comandos (primera versión)**  
-Pasar las clases con `@RestController` como argumentos:
+**Option 1 – Load by command line (first version)**  
+Pass `@RestController` class names as arguments:
 
 ```bash
 mvn exec:java -Dexec.mainClass="co.edu.escuelaing.reflexionlab.MicroSpringBoot" -Dexec.args="co.edu.escuelaing.reflexionlab.controller.FirstWebService"
 ```
 
-O con `java` directamente:
+Or with `java` directly:
 
 ```bash
 java -cp target/classes co.edu.escuelaing.reflexionlab.MicroSpringBoot co.edu.escuelaing.reflexionlab.controller.FirstWebService
 ```
 
-**Opción 2 – Escaneo del classpath (versión final)**  
-Sin argumentos; se cargan todos los `@RestController` del paquete:
+**Option 2 – Classpath scan (final version)**  
+No arguments; all `@RestController` classes under the package are loaded:
 
 ```bash
 mvn compile exec:java -Dexec.mainClass="co.edu.escuelaing.reflexionlab.MicroSpringBoot"
 ```
 
-El servidor queda en **http://localhost:35000**.
+Server runs at **http://localhost:35000**.
 
-### Pruebas manuales
+### Manual testing
 
-- `http://localhost:35000/` → mensaje del `HelloController`.
+- `http://localhost:35000/` → message from `HelloController`.
 - `http://localhost:35000/greeting` → “Hola World” (default).
-- `http://localhost:35000/greeting?name=Estudiante` → “Hola Estudiante”.
-- `http://localhost:35000/hello` → mensaje de `FirstWebService` (si está cargado).
-- `http://localhost:35000/index.html` → página estática.
+- `http://localhost:35000/greeting?name=YourName` → “Hola YourName”.
+- `http://localhost:35000/hello` → message from `FirstWebService` (if loaded).
+- `http://localhost:35000/index.html` → static page.
 
-## Tests automatizados
+---
 
-Se usan JUnit 5 para:
+## Automated tests
 
-- **ReflectionRequestHandlerTest:** registro de controladores, invocación de `@GetMapping`, soporte de `@RequestParam` y valor por defecto, varios controladores.
-- **ClassPathScannerTest:** comprobación de que el escáner encuentra las clases con `@RestController`.
+JUnit 5 is used for:
 
-Ejecución:
+- **ReflectionRequestHandlerTest:** controller registration, `@GetMapping` invocation, `@RequestParam` and default value support, multiple controllers.
+- **ClassPathScannerTest:** verifies the scanner finds classes with `@RestController`.
+
+Run tests:
 
 ```bash
 mvn test
 ```
 
-## Estructura Maven
+---
+
+## Maven structure
 
 ```
 src/main/java/co/edu/escuelaing/reflexionlab/
-  MicroSpringBoot.java                                     # Punto de entrada
-  annotation/                                              # Anotaciones
+  MicroSpringBoot.java                                     # Entry point
+  annotation/                                             # Annotations
     RestController.java, GetMapping.java, RequestParam.java
-  server/                                                  # Servidor HTTP
+  server/                                                 # HTTP server
     HttpServer.java, RequestHandler.java
-  ioc/                                                     # IoC y reflexión
+  ioc/                                                    # IoC and reflection
     ReflectionRequestHandler.java, ClassPathScanner.java
-  controller/                                              # Controladores de ejemplo
+  controller/                                             # Example controllers
     HelloController.java, GreetingController.java, FirstWebService.java
 src/main/resources/static/
   index.html
@@ -128,15 +194,37 @@ src/test/java/co/edu/escuelaing/reflexionlab/
 pom.xml
 ```
 
-## Despliegue en AWS
+---
 
-Para la evidencia de despliegue en AWS:
+## AWS deployment
 
-1. Empaquetar: `mvn package`.
-2. Subir el JAR (o ejecutar en una instancia EC2 con Java 11) y ejecutar sin argumentos para cargar todos los controladores.
-3. Abrir el puerto 35000 en el security group y acceder a `http://<IP-pública>:35000`.
+### Steps
 
-## Referencias
+1. Build: `mvn package`.
+2. Upload the JAR to an EC2 instance (or clone the repo and run `mvn package` there). Ensure Java 11+ is installed.
+3. Run the server (e.g. `java -jar target/reflexionlab-1.0-SNAPSHOT.jar` or with `-cp target/classes ... MicroSpringBoot`).
+4. Open port **35000** in the instance security group.
+5. Access `http://<public-IP>:35000`.
 
-- Taller: Meta protocolos de objetos, patrón IoC, reflexión.
-- Ciclo de vida y código fuente gestionados con Maven; proyecto en GitHub; evidencia de ejecución en AWS según entregables.
+### AWS deployment evidence
+
+*Add your screenshots below. Place image files in the `docs/aws/` folder and reference them here.*
+
+**1. EC2 instance / server running**
+
+<!-- Add your screenshot: e.g. ![Server running on EC2](docs/aws/01-server-running.png) -->
+
+**2. Application responding in the browser**
+
+<!-- Add your screenshot: e.g. ![Browser - root](docs/aws/02-browser-root.png) -->
+
+**3. (Optional) Additional evidence (e.g. Security Group, terminal)**
+
+<!-- Add your screenshot: e.g. ![Security group or terminal](docs/aws/03-optional.png) -->
+
+---
+
+## References
+
+- Workshop: Object meta-protocols, IoC pattern, reflection.
+- Source code and lifecycle managed with Maven; project on GitHub; AWS deployment evidence as per deliverables.
